@@ -69,11 +69,15 @@ public class Sysinfo extends CordovaPlugin {
 	
 	public JSONObject getMemoryInfo() {
 		JSONObject memory = new JSONObject();
+		Runtime runtime = Runtime.getRuntime();
 		try {
 			memory.put("available", this.memoryInfo.availMem);
 			memory.put("total", this.getTotalMemory());
 			memory.put("threshold", this.memoryInfo.threshold);
 			memory.put("low", this.memoryInfo.lowMemory);
+			memory.put("free", runtime.freeMemory());
+			memory.put("total", runtime.totalMemory());
+			memory.put("max", runtime.maxMemory());
 		} catch (final Exception e) {
 			
 		}

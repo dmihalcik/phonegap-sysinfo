@@ -19,24 +19,37 @@ import java.util.Scanner;
 import android.util.*;
 
 public class Sysinfo extends CordovaPlugin {
+	private static final String TAG = "Sysinfo";
+	private static final boolean ALWAYS_GET_CPU = false;
 	private MemoryInfo memoryInfo;
+	private JSONObject cpuInfo;
 	
 	@Override
 	public boolean execute(String action, JSONArray args, CallbackContext callback) {
 
 		Activity activity = this.cordova.getActivity();
 		ActivityManager m = (ActivityManager) activity.getSystemService(Activity.ACTIVITY_SERVICE);
-		this.memoryInfo = new MemoryInfo();
+		
+		// store the memory info into a field.
+		if (null == this.memoryInfo){
+			this.memoryInfo = new MemoryInfo();
+		}
 		m.getMemoryInfo(this.memoryInfo);
+
+		// Store the CPU info into a field. Only do this the first time
+		if (null == this.cpuInfo || ALWAYS_GET_CPU) {
+			cpuInfo = this.getCpuInfo();
+		}
 		
 		if (action.equals("getInfo")) {
 			try {
 				JSONObject r = new JSONObject();
-	            r.put("cpu", this.getCpuInfo());
+	            r.put("cpu", this.cpuInfo);
 	            r.put("memory", this.getMemoryInfo());
-	            Log.d("OUTPUT", r.toString());
+	            Log.v(TAG, r.toString());
 	            callback.success(r);
 			} catch (final Exception e) {
+	            Log.e(TAG, "getInfo failed", e);
 				callback.error(e.getMessage());
 			}
 		}
@@ -63,7 +76,9 @@ public class Sysinfo extends CordovaPlugin {
 			
 			cpu.put("cores", cpuCores);
 			
-		} catch (final Exception e) { }
+		} catch (final Exception e) {
+            Log.w(TAG, "getInfo unable to retrieve CPU details", e);
+		}
 		return cpu;
 	}
 	
@@ -79,7 +94,7 @@ public class Sysinfo extends CordovaPlugin {
 			memory.put("total", runtime.totalMemory());
 			memory.put("max", runtime.maxMemory());
 		} catch (final Exception e) {
-			
+            Log.w(TAG, "getInfo failed to fully retrieve memory details", e);
 		}
 		return memory;
 	}
@@ -108,8 +123,10 @@ public class Sysinfo extends CordovaPlugin {
 		try {
 	      final Process process = new ProcessBuilder(new String[] { "/system/bin/cat", pSystemFile }).start();
 	      in = process.getInputStream();
-	      content = readFully(in);
-	    } catch (final Exception e) { } 
+	      content = readFullyAndClose(in);
+	    } catch (final Exception e) {
+            Log.w(TAG, "getInfo unable to read system file");
+	    }
 		return content;
 	}
 	
@@ -121,12 +138,25 @@ public class Sysinfo extends CordovaPlugin {
 		return Integer.parseInt( content );
 	}
 	
-	private String readFully(final InputStream pInputStream) throws IOException {
-		final StringBuilder sb = new StringBuilder();
-		final Scanner sc = new Scanner(pInputStream);
-	    while(sc.hasNextLine()) {
-	      sb.append(sc.nextLine());
-	    }
-	    return sb.toString();
+	private String readFullyAndClose(final InputStream pInputStream) throws IOException {
+		Scanner sc = null;
+		try {
+			final StringBuilder sb = new StringBuilder();
+			sc = new Scanner(pInputStream);
+			try {
+			    while(sc.hasNextLine()) {
+			      sb.append(sc.nextLine());
+			    }
+			    return sb.toString();
+			} finally {
+				sc.close();
+				sc = null;
+			}
+		} finally {
+			// paranoia is for the paranoid
+			if (null == sc) {
+				pInputStream.close();
+			}
+		}
 	}
 }
